@@ -1030,7 +1030,7 @@
 
     /* ===== Responsive: ทุกอุปกรณ์ ===== */
     html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-    html, body { max-width: 100%; overflow-x: hidden; }
+    html, body { max-width: 100%; overflow-x: clip; }
     body { overflow-wrap: anywhere; word-break: break-word; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
     img, svg, video, table, pre { max-width: 100%; }
     pre, table { overflow-x: auto; display: block; }
@@ -1076,6 +1076,7 @@
     .toc-link:hover { background: var(--accent-gold-light); }
     .toc-link b { color: var(--accent-gold); margin-right: 0.3rem; }
     @media print { .toc-fab, .toc-top-btn, .toc-drawer, .toc-backdrop { display: none !important; } }
+    .btn-toc { background: var(--accent-gold); color: #fff; border-color: var(--accent-gold); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -1091,6 +1092,7 @@
   <div class="tts-sticky-bar">
     <div class="tts-bar-inner">
       <div class="tts-main-controls">
+        <button class="btn btn-toc" onclick="openToc()" title="เปิดสารบัญ">☰ สารบัญ</button>
         <button class="btn btn-primary" id="globalPlayBtn" onclick="handleGlobalPlayPause()">▶️ อ่านต่อเนื่องทุกเล่ม</button>
         <button class="btn" onclick="playPrevVolume()" title="เล่มก่อนหน้า">⏮️ เล่มก่อน</button>
         <button class="btn" onclick="playNextVolume()" title="เล่มถัดไป">⏭️ เล่มถัดไป</button>
@@ -5466,8 +5468,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-  <button class="toc-fab" onclick="openToc()" aria-label="เปิดสารบัญ">☰ สารบัญ</button>
-  <button class="toc-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นบนสุด">↑</button>
+    <button class="toc-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นบนสุด">↑</button>
   <div class="toc-backdrop" id="tocBackdrop" onclick="closeToc()"></div>
   <aside class="toc-drawer" id="tocDrawer" aria-label="สารบัญ">
     <div class="toc-head"><h2>☰ สารบัญ</h2><button class="toc-close" onclick="closeToc()" aria-label="ปิด">✕</button></div>
