@@ -4148,19 +4148,22 @@
         return;
       }
 
-      gridEl.innerHTML = filtered.map(p => `
-        <div class="person-card" id="person-card-${p.id}">
+      gridEl.innerHTML = filtered.map(p => {
+        const cid = `person-card-${p.id}`;
+        const lbl = `🏛️ ดัชนีพระอริยบุคคล: ${p.name}`;
+        return `
+        <div class="person-card" id="${cid}">
           <div class="person-card-top">
             <span class="person-cat-badge ${p.category}">${p.categoryLabel}</span>
-            <span class="person-stage-badge">☸️ ${p.stage}</span>
+            <span class="person-stage-badge">☸️ ${renderBoxSents('ระดับอริยผล ' + p.stage, cid, 'stage', lbl)}</span>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.4rem;">
-            <div class="person-name">${p.name}</div>
+            <div class="person-name">${renderBoxSents(p.name, cid, 'name', lbl)}</div>
             <button class="mini-speak-btn" onclick="speakPersonCard('${p.id}')" title="อ่านประวัติและคุณธรรมของ ${p.name}">🔊 อ่าน</button>
           </div>
-          <div class="person-etadagga">🏆 ${p.etadagga}</div>
-          <div class="person-bio">${p.bio}</div>
-          <div class="person-suttas"><strong>📜 พระสูตร / ขันธกะ / คัมภีร์สำคัญ:</strong> ${p.keySuttas}</div>
+          <div class="person-etadagga">🏆 ${renderBoxSents(p.etadagga, cid, 'eta', lbl)}</div>
+          <div class="person-bio">${renderBoxSents(p.bio, cid, 'bio', lbl)}</div>
+          <div class="person-suttas"><strong>📜 พระสูตร / ขันธกะ / คัมภีร์สำคัญ:</strong> ${renderBoxSents(p.keySuttas, cid, 'suttas', lbl)}</div>
           <div class="person-vols-row">
             <span class="person-vols-label">📚 ปรากฏในเล่มที่ (คลิกเพื่อเปิดอ่านทันที):</span>
             ${(p.volumes || []).map(vNum => `
@@ -4173,7 +4176,7 @@
             </button>
           </div>
         </div>
-      `).join('');
+      `}).join('');
     }
 
     function filterPersonCategory(cat, btnEl) {
@@ -4228,49 +4231,60 @@
       }
     }
 
-    function speakPersonCard(personId) {
-      const p = noblePersonsIndexData.find(item => item.id === personId);
-      if (!p) return;
+    function renderBoxSents(text, boxId, key, label) {
+      const sents = chunkPlainThaiSegment(String(text || ''));
+      const safeLbl = String(label || '').replace(/'/g, "\'");
+      return sents.map((s, idx) => {
+        const sid = `sent-${boxId}-${key}-${idx}`;
+        return `<span class="tts-sent" id="${sid}" onclick="speakBoxFromSent('${boxId}', '${sid}', '${safeLbl}')" title="คลิกเพื่ออ่านตั้งแต่ประโยคนี้">${s}</span>`;
+      }).join(' ');
+    }
+
+    function buildChunksFromBox(boxId, label) {
+      const box = document.getElementById(boxId);
+      if (!box) return [];
+      const spans = Array.from(box.querySelectorAll('.tts-sent'));
+      const nameOrder = spans.filter(s => s.id.includes('-name-'));
+      const others = spans.filter(s => !s.id.includes('-name-'));
+      const ordered = nameOrder.concat(others);
+      return ordered.map(sp => ({
+        elementId: boxId,
+        sentId: sp.id,
+        isBuddha: sp.classList.contains('buddha-sent'),
+        label: label || 'กำลังอ่าน',
+        text: sp.textContent
+      }));
+    }
+
+    function speakBoxFromSent(boxId, sentId, label) {
+      const chunks = buildChunksFromBox(boxId, label);
+      if (!chunks.length) return;
       autoContinueVolumes = false;
       activeVolIndex = -1;
-      const fullText = `${p.name}. ระดับอริยผล: ${p.stage}. คุณความดีเด่น: ${p.etadagga}. ประวัติและเหตุการณ์สำคัญ: ${p.bio}. พระสูตรและคัมภีร์สำคัญได้แก่ ${p.keySuttas}. ปรากฏในพระไตรปิฎกเล่มที่ ${p.volumes.join(', ')}.`;
-      const sents = chunkPlainThaiSegment(fullText);
-      speechQueue = sents.map(st => ({
-        elementId: `person-card-${p.id}`,
-        sentId: null,
-        isBuddha: false,
-        label: `🏛️ ดัชนีพระอริยบุคคล: ${p.name}`,
-        text: st
-      }));
-      currentChunkIndex = 0;
+      speechQueue = chunks;
+      const idx = chunks.findIndex(c => c.sentId === sentId);
+      currentChunkIndex = idx >= 0 ? idx : 0;
       startQueuePlayback();
     }
 
+    function speakPersonCard(personId) {
+      const p = noblePersonsIndexData.find(item => item.id === personId);
+      if (!p) return;
+      speakBoxFromSent(`person-card-${p.id}`, null, `🏛️ ดัชนีพระอริยบุคคล: ${p.name}`);
+    }
+
     function speakAllVisiblePersons() {
-      const inputEl = document.getElementById('personSearchInput');
-      const query = (inputEl ? inputEl.value : '').trim().toLowerCase();
-      const filtered = noblePersonsIndexData.filter(p => {
-        if (currentPersonCategory !== 'all' && p.category !== currentPersonCategory) return false;
-        if (!query) return true;
-        const combined = `${p.name} ${p.categoryLabel} ${p.stage} ${p.etadagga} ${p.bio} ${p.keySuttas} ${p.searchKeyword}`.toLowerCase();
-        return combined.includes(query);
-      });
-      if (filtered.length === 0) return;
+      const cards = Array.from(document.querySelectorAll('#nobleIndexGrid .person-card'));
+      if (!cards.length) return;
       autoContinueVolumes = false;
       activeVolIndex = -1;
-      const chunks = [];
-      filtered.forEach(p => {
-        const txt = `${p.name}. ${p.stage}. ${p.etadagga}. ${p.bio}`;
-        chunkPlainThaiSegment(txt).forEach(st => {
-          chunks.push({
-            elementId: `person-card-${p.id}`,
-            sentId: null,
-            isBuddha: false,
-            label: `🏛️ ดัชนีพระอริยบุคคล: ${p.name}`,
-            text: st
-          });
-        });
+      let chunks = [];
+      cards.forEach(c => {
+        const pid = c.id.replace('person-card-', '');
+        const p = noblePersonsIndexData.find(item => item.id === pid);
+        chunks = chunks.concat(buildChunksFromBox(c.id, p ? `🏛️ ดัชนีพระอริยบุคคล: ${p.name}` : '🏛️ ดัชนีพระอริยบุคคล'));
       });
+      if (!chunks.length) return;
       speechQueue = chunks;
       currentChunkIndex = 0;
       startQueuePlayback();
@@ -5272,23 +5286,57 @@ function currentStudyQuery() { return (document.getElementById('studySearchInput
 function studyJump(vol, kw) { jumpToPersonInVolume(vol, kw, null); }
 function studySearchAll(kw) { searchPersonInAllVolumes(kw); }
 
+function speakStudyPanelAll(panelId, label) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const items = Array.from(panel.querySelectorAll('.study-item'));
+  let chunks = [];
+  items.forEach(it => { chunks = chunks.concat(buildChunksFromBox(it.id, label)); });
+  if (!chunks.length) return;
+  autoContinueVolumes = false;
+  activeVolIndex = -1;
+  speechQueue = chunks;
+  currentChunkIndex = 0;
+  startQueuePlayback();
+}
+
 function renderStudyPanels() {
   const q = currentStudyQuery();
   const topicHtml = (arr, cat, label) => {
-    const items = arr.filter(t => t.cat === cat && (!q || `${t.title} ${t.desc} ${t.kw}`.toLowerCase().includes(q)));
+    const items = arr.map((t, idx) => ({ ...t, idx })).filter(t => t.cat === cat && (!q || `${t.title} ${t.desc} ${t.kw}`.toLowerCase().includes(q)));
     if (!items.length) return '';
-    return `<h3 style="margin:0.6rem 0 0.4rem;">${label}</h3><div class="study-grid">` + items.map(t => `
-      <div class="study-item"><h4>${t.title}</h4><p>${t.desc}</p>
-      ${t.refs.map(r => `<a href="#" class="study-chip" onclick="studyJump(${r[1]}, '${t.kw}'); return false;">${r[0]} • เล่ม ${r[1]}</a>`).join('')}
-      <button class="study-chip" onclick="studySearchAll('${t.kw}')">🔍 ค้นหา "${t.kw}" ทุกเล่ม</button></div>`).join('') + '</div>';
+    return `<div style="display:flex; justify-content:space-between; align-items:center; margin:0.6rem 0 0.4rem;"><h3 style="margin:0;">${label}</h3><button class="mini-speak-btn" onclick="speakStudyPanelAll('panel-dhamma', '☸️ ดัชนีหลักธรรม')">🔊 อ่านหมวดหลักธรรม</button></div><div class="study-grid">` + items.map(t => {
+      const bid = `dhamma-item-${t.idx}`;
+      const lbl = `☸️ หลักธรรม: ${t.title}`;
+      return `
+      <div class="study-item" id="${bid}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.4rem;">
+          <h4>${renderBoxSents(t.title, bid, 'name', lbl)}</h4>
+          <button class="mini-speak-btn" onclick="speakBoxFromSent('${bid}', null, '${lbl}')">🔊 อ่าน</button>
+        </div>
+        <p>${renderBoxSents(t.desc, bid, 'desc', lbl)}</p>
+        ${t.refs.map(r => `<a href="#" class="study-chip" onclick="studyJump(${r[1]}, '${t.kw}'); return false;">${r[0]} • เล่ม ${r[1]}</a>`).join('')}
+        <button class="study-chip" onclick="studySearchAll('${t.kw}')">🔍 ค้นหา "${t.kw}" ทุกเล่ม</button>
+      </div>`;
+    }).join('') + '</div>';
   };
   const d = document.getElementById('panel-dhamma');
   d.innerHTML = (topicHtml(dhammaTopics, 'core', '☸️ หมวดหลักธรรมหัวใจ') + topicHtml(dhammaTopics, 'life', '🌿 หมวดธรรมะแก้ปัญหาชีวิต')) || '<p>ไม่พบหัวข้อที่ตรงกับคำค้น</p>';
-  const pl = placesData.filter(p => !q || `${p.title} ${p.desc} ${p.kw}`.toLowerCase().includes(q));
-  document.getElementById('panel-places').innerHTML = pl.length ? '<div class="study-grid">' + pl.map(p => `
-    <div class="study-item"><h4>📍 ${p.title}</h4><p>${p.desc}</p>
-    ${p.vols.map(v => `<a href="#" class="study-chip" onclick="studyJump(${v}, '${p.kw}'); return false;">เล่ม ${v}</a>`).join('')}
-    <button class="study-chip" onclick="studySearchAll('${p.kw}')">🔍 ค้นหา "${p.kw}" ทุกเล่ม</button></div>`).join('') + '</div>' : '<p>ไม่พบสถานที่ที่ตรงกับคำค้น</p>';
+  const pl = placesData.map((p, idx) => ({ ...p, idx })).filter(p => !q || `${p.title} ${p.desc} ${p.kw}`.toLowerCase().includes(q));
+  document.getElementById('panel-places').innerHTML = pl.length ? `<div style="display:flex; justify-content:space-between; align-items:center; margin:0.4rem 0;"><h3 style="margin:0;">🗺️ พุทธสถานสำคัญในพระไตรปิฎก</h3><button class="mini-speak-btn" onclick="speakStudyPanelAll('panel-places', '🗺️ พุทธสถาน')">🔊 อ่านพุทธสถานทั้งหมด</button></div><div class="study-grid">` + pl.map(p => {
+    const bid = `place-item-${p.idx}`;
+    const lbl = `🗺️ พุทธสถาน: ${p.title}`;
+    return `
+    <div class="study-item" id="${bid}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.4rem;">
+        <h4>📍 ${renderBoxSents(p.title, bid, 'name', lbl)}</h4>
+        <button class="mini-speak-btn" onclick="speakBoxFromSent('${bid}', null, '${lbl}')">🔊 อ่าน</button>
+      </div>
+      <p>${renderBoxSents(p.desc, bid, 'desc', lbl)}</p>
+      ${p.vols.map(v => `<a href="#" class="study-chip" onclick="studyJump(${v}, '${p.kw}'); return false;">เล่ม ${v}</a>`).join('')}
+      <button class="study-chip" onclick="studySearchAll('${p.kw}')">🔍 ค้นหา "${p.kw}" ทุกเล่ม</button>
+    </div>`;
+  }).join('') + '</div>' : '<p>ไม่พบสถานที่ที่ตรงกับคำค้น</p>';
   renderBookmarkPanel();
 }
 
@@ -5321,19 +5369,23 @@ function randomQuote() {
   if (!qs.length) return;
   currentQuote = qs[Math.floor(Math.random() * qs.length)];
   document.getElementById('quoteTotal').textContent = ` (คลังพุทธพจน์ ${qs.length} บท)`;
-  document.getElementById('quoteBox').innerHTML = `<div class="quote-random-box">
-    <div class="qp">${currentQuote.pali}</div><div class="qt">“${currentQuote.thai}”</div>
+  const bid = 'quote-random-card';
+  const lbl = `✨ พุทธพจน์สุ่ม (เล่มที่ ${currentQuote.vol})`;
+  const sents = chunkPlainThaiSegment(currentQuote.thai);
+  const thaiHtml = sents.map((s, idx) => {
+    const sid = `sent-${bid}-thai-${idx}`;
+    return `<span class="tts-sent buddha-sent" id="${sid}" onclick="speakBoxFromSent('${bid}', '${sid}', '${lbl}')" title="คลิกเพื่ออ่านตั้งแต่ประโยคนี้">${s}</span>`;
+  }).join(' ');
+  document.getElementById('quoteBox').innerHTML = `<div class="quote-random-box" id="${bid}">
+    <div class="qp">${currentQuote.pali}</div><div class="qt">“${thaiHtml}”</div>
     <button class="study-chip" onclick="speakCurrentQuote()">🔊 ฟัง</button>
     <button class="study-chip" onclick="copyCurrentQuote()">📋 คัดลอก</button>
     <button class="study-chip" onclick="studyJump(currentQuote.vol, currentQuote.thai.slice(0, 18))">📖 ไปที่เล่ม ${currentQuote.vol}</button>
     <button class="study-chip" onclick="randomQuote()">🎲 สุ่มใหม่</button></div>`;
 }
 function speakCurrentQuote() {
-  if (!currentQuote || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(normalizeTextForSpeech(currentQuote.thai));
-  u.lang = 'th-TH'; u.rate = currentRate; if (selectedVoice) u.voice = selectedVoice;
-  window.speechSynthesis.speak(u);
+  if (!currentQuote) return;
+  speakBoxFromSent('quote-random-card', null, `✨ พุทธพจน์สุ่ม (เล่มที่ ${currentQuote.vol})`);
 }
 function copyText(txt, btn) {
   const done = () => { if (btn) { const o = btn.textContent; btn.textContent = '✅ คัดลอกแล้ว'; setTimeout(() => btn.textContent = o, 1400); } };
@@ -5364,10 +5416,18 @@ function renderBookmarkPanel() {
   const a = loadBms();
   const c = document.getElementById('bmCount'); if (c) c.textContent = a.length;
   const p = document.getElementById('panel-mine'); if (!p) return;
-  p.innerHTML = a.length ? '<div class="study-grid">' + a.map(b => `
-    <div class="study-item"><h4>⭐ ${b.label}</h4>
-    <a href="#" class="study-chip" onclick="goBookmark(${b.vol}, ${b.idx}); return false;">📖 เปิดอ่าน</a>
-    <button class="study-chip" onclick="toggleBookmark(${b.vol}, ${b.idx})">🗑️ ลบ</button></div>`).join('') + '</div>'
+  p.innerHTML = a.length ? '<div class="study-grid">' + a.map((b, i) => {
+    const bid = `bm-item-${i}`;
+    return `
+    <div class="study-item" id="${bid}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.4rem;">
+        <h4>⭐ ${renderBoxSents(b.label, bid, 'name', '⭐ คลังของฉัน')}</h4>
+        <button class="mini-speak-btn" onclick="speakBoxFromSent('${bid}', null, '⭐ คลังของฉัน')">🔊 อ่าน</button>
+      </div>
+      <a href="#" class="study-chip" onclick="goBookmark(${b.vol}, ${b.idx}); return false;">📖 เปิดอ่าน</a>
+      <button class="study-chip" onclick="toggleBookmark(${b.vol}, ${b.idx})">🗑️ ลบ</button>
+    </div>`;
+  }).join('') + '</div>'
     : '<p>ยังไม่มีรายการ — กดปุ่ม ☆ ที่เล่มหรือเรื่องราวเพื่อเก็บไว้ที่นี่</p>';
 }
 function goBookmark(vol, idx) {
@@ -5473,13 +5533,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ---------- Highlight ทุกส่วนที่กำลังอ่าน ----------
 (function () {
-  const sel = '.buddha-quote-box, .story-commentary, .story-card, .w5h1-item, .scripture-layer-item, .core-summary-box';
+  const sel = '.buddha-quote-box, .story-commentary, .story-card, .w5h1-item, .scripture-layer-item, .core-summary-box, .person-card, .person-etadagga, .person-bio, .person-suttas, .study-item, .quote-random-box, .layer-box, .blueprint-card';
   const origHi = highlightElement;
   highlightElement = function (elementId, sentId) {
     origHi.apply(this, arguments);
     const s = sentId && document.getElementById(sentId);
     if (!s) return;
-    s.closest ? null : null;
     const seen = new Set();
     let el = s.parentElement;
     while (el && el !== document.body) {
@@ -5488,6 +5547,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     const q = s.closest('.buddha-quote-box');
     if (q) { const pb = q.querySelector('.buddha-pali-block'); if (pb) pb.classList.add('reading-pali'); }
+    const rq = s.closest('.quote-random-box');
+    if (rq) { const qp = rq.querySelector('.qp'); if (qp) qp.classList.add('reading-pali'); }
   };
   const origClear = clearHighlights;
   clearHighlights = function () {
@@ -5495,6 +5556,20 @@ window.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.reading-block').forEach(e => e.classList.remove('reading-block'));
     document.querySelectorAll('.reading-pali').forEach(e => e.classList.remove('reading-pali'));
   };
+
+  // Wrap Intro section sentences for sentence-level & block-level highlighting
+  window.addEventListener('DOMContentLoaded', () => {
+    const introSec = document.getElementById('intro-section');
+    if (!introSec) return;
+    const nodes = introSec.querySelectorAll('.blueprint-title, .layer-box h3, .layer-box p, .w5h1-item p');
+    nodes.forEach((node, nIdx) => {
+      const txt = node.textContent.trim();
+      node.innerHTML = renderBoxSents(txt, 'intro-section', 'node' + nIdx, 'บทนำ: โครงสร้างและแก่นรวม');
+    });
+    window.speakIntro = function () {
+      speakBoxFromSent('intro-section', null, 'บทนำ: โครงสร้างและแก่นรวม');
+    };
+  });
 })();
 </script>
 
