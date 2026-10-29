@@ -1077,6 +1077,9 @@
     .toc-link b { color: var(--accent-gold); margin-right: 0.3rem; }
     @media print { .toc-fab, .toc-top-btn, .toc-drawer, .toc-backdrop { display: none !important; } }
     .btn-toc { background: var(--accent-gold); color: #fff; border-color: var(--accent-gold); font-weight: 700; }
+    .reading-block { background-color: var(--highlight-speaking) !important; border-color: var(--highlight-border) !important; box-shadow: 0 0 0 2px var(--highlight-border); transition: background-color 0.2s; }
+    .story-card.reading-block { box-shadow: 0 0 0 2px var(--highlight-border); }
+    .reading-pali { background-color: #fbbf24 !important; color: #18130a !important; border-radius: 6px; padding: 0.4rem 0.6rem; }
   </style>
 </head>
 <body>
@@ -5375,12 +5378,13 @@ function goBookmark(vol, idx) {
 // ---------- ตกแต่งปุ่มในการ์ดเล่ม ----------
 function decorateVolumes() {
   const bms = loadBms(); const on = (vol, idx) => bms.some(b => b.vol === vol && b.idx === idx);
+  document.querySelectorAll('#volumesContainer .deco-btn').forEach(el => el.remove());
   document.querySelectorAll('#volumesContainer .volume-card').forEach(card => {
     const vol = parseInt(card.id.replace('vol-card-', ''), 10);
     const ctr = card.querySelector('.vol-card-controls');
     if (ctr) {
       const b = document.createElement('button');
-      b.className = 'bm-btn' + (on(vol, -1) ? ' on' : '');
+      b.className = 'deco-btn bm-btn' + (on(vol, -1) ? ' on' : '');
       b.textContent = on(vol, -1) ? '⭐ เก็บแล้ว' : '☆ เก็บเล่มนี้';
       b.onclick = () => toggleBookmark(vol, -1);
       ctr.appendChild(b);
@@ -5389,7 +5393,7 @@ function decorateVolumes() {
       const idx = parseInt(sc.id.split('-story-')[1], 10);
       const top = sc.querySelector('.story-card-top'); if (!top) return;
       const b = document.createElement('button');
-      b.className = 'bm-btn' + (on(vol, idx) ? ' on' : '');
+      b.className = 'deco-btn bm-btn' + (on(vol, idx) ? ' on' : '');
       b.textContent = on(vol, idx) ? '⭐ เก็บแล้ว' : '☆ เก็บ';
       b.onclick = () => toggleBookmark(vol, idx);
       top.appendChild(b);
@@ -5397,7 +5401,7 @@ function decorateVolumes() {
     card.querySelectorAll('.buddha-quote-box').forEach(box => {
       const act = box.querySelector('.buddha-quote-actions'); if (!act) return;
       const b = document.createElement('button');
-      b.className = 'mini-speak-btn'; b.textContent = '📋 คัดลอก';
+      b.className = 'deco-btn mini-speak-btn'; b.textContent = '📋 คัดลอก';
       b.onclick = () => {
         const pali = (box.querySelector('.buddha-pali-block') || {}).textContent || '';
         const thai = (box.querySelector('.buddha-quote-content') || {}).textContent || '';
@@ -5466,6 +5470,32 @@ window.addEventListener('DOMContentLoaded', () => {
   updateResumeInfo();
   decorateVolumes();
 });
+
+// ---------- Highlight ทุกส่วนที่กำลังอ่าน ----------
+(function () {
+  const sel = '.buddha-quote-box, .story-commentary, .story-card, .w5h1-item, .scripture-layer-item, .core-summary-box';
+  const origHi = highlightElement;
+  highlightElement = function (elementId, sentId) {
+    origHi.apply(this, arguments);
+    const s = sentId && document.getElementById(sentId);
+    if (!s) return;
+    s.closest ? null : null;
+    const seen = new Set();
+    let el = s.parentElement;
+    while (el && el !== document.body) {
+      if (el.matches && el.matches(sel) && !seen.has(el)) { seen.add(el); el.classList.add('reading-block'); }
+      el = el.parentElement;
+    }
+    const q = s.closest('.buddha-quote-box');
+    if (q) { const pb = q.querySelector('.buddha-pali-block'); if (pb) pb.classList.add('reading-pali'); }
+  };
+  const origClear = clearHighlights;
+  clearHighlights = function () {
+    origClear.apply(this, arguments);
+    document.querySelectorAll('.reading-block').forEach(e => e.classList.remove('reading-block'));
+    document.querySelectorAll('.reading-pali').forEach(e => e.classList.remove('reading-pali'));
+  };
+})();
 </script>
 
     <button class="toc-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นบนสุด">↑</button>
